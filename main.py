@@ -27,10 +27,12 @@ from data_loader import get_loader
 
 # Set random seed for reproducibility
 manualSeed = 999
+
 #manualSeed = random.randint(1, 10000) # use if you want new results
 print("Random Seed: ", manualSeed)
 random.seed(manualSeed)
 torch.manual_seed(manualSeed)
+torch.autograd.set_detect_anomaly(True)
 
 directory = './result'
 if not os.path.exists(directory):
@@ -58,6 +60,8 @@ if __name__ == "__main__":
     print(len(train_loader.dataset))
     print(len(test_loader.dataset))
 
+    #------------ model -------------#
+
     net = VaeGan(z_size=z_size,recon_level=recon_level).cuda()
 
     #------------ margin and equilibirum -------------#
@@ -73,12 +77,12 @@ if __name__ == "__main__":
     #lr_encoder = MultiStepLR(optimizer_encoder,milestones=[2],gamma=1)
     optimizer_encoder = RMSprop(params=net.encoder.parameters(),lr=lr,alpha=0.9,eps=1e-8,weight_decay=0,momentum=0,centered=False)
     lr_encoder = ExponentialLR(optimizer_encoder, gamma=decay_lr)
-    
+
     #optimizer_decoder = Adam(params=net.decoder.parameters(),lr = lr,betas=(0.9,0.999))
     #lr_decoder = MultiStepLR(optimizer_decoder,milestones=[2],gamma=1)
     optimizer_decoder = RMSprop(params=net.decoder.parameters(),lr=lr,alpha=0.9,eps=1e-8,weight_decay=0,momentum=0,centered=False)
     lr_decoder = ExponentialLR(optimizer_decoder, gamma=decay_lr)
-    
+
     #optimizer_discriminator = Adam(params=net.discriminator.parameters(),lr = lr,betas=(0.9,0.999))
     #lr_discriminator = MultiStepLR(optimizer_discriminator,milestones=[2],gamma=1)
     optimizer_discriminator = RMSprop(params=net.discriminator.parameters(),lr=lr,alpha=0.9,eps=1e-8,weight_decay=0,momentum=0,centered=False)
@@ -88,6 +92,7 @@ if __name__ == "__main__":
 
     for i in range(n_epochs+1):
         print('Epoch:%s' % (i))
+
         for j, (x, label) in enumerate(train_loader):
             net.train()
             batch_size = len(x)
@@ -104,9 +109,9 @@ if __name__ == "__main__":
             disc_class_original = disc_class[:batch_size]
             disc_class_predicted = disc_class[batch_size:-batch_size]
             disc_class_sampled = disc_class[-batch_size:]
-            
+
             nle, kl, mse, bce_dis_original, bce_dis_predicted, bce_dis_sampled = VaeGan.loss(x, x_tilde, \
-                                                                        disc_layer_original, disc_layer_predicted, disc_layer_sampled, 
+                                                                        disc_layer_original, disc_layer_predicted, disc_layer_sampled,
                                                                         disc_class_original, disc_class_predicted, disc_class_sampled,
                                                                         mus, log_variances)
 
@@ -118,7 +123,7 @@ if __name__ == "__main__":
             # selectively disable the decoder of the discriminator if they are unbalanced
             train_dis = True
             train_dec = True
-            
+
             if torch.mean(bce_dis_original).item() < equilibrium-margin or torch.mean(bce_dis_predicted).item() < equilibrium-margin:
                 train_dis = False
             if torch.mean(bce_dis_original).item() > equilibrium+margin or torch.mean(bce_dis_predicted).item() > equilibrium+margin:
@@ -127,24 +132,28 @@ if __name__ == "__main__":
                 train_dis = True
                 train_dec = True
 
-
             net.zero_grad()
 
-            # encoder
-            loss_encoder.backward(retain_graph=True)  #someone likes to clamp the grad here: [p.grad.data.clamp_(-1,1) for p in net.encoder.parameters()]
-            optimizer_encoder.step()
-            net.zero_grad()  # cleanothers, so they are not afflicted by encoder loss
+            #discriminator
+            if train_dis:
+                loss_discriminator.backward(retain_graph=True)  #[p.grad.data.clamp_(-1,1) for p in net.discriminator.parameters()]
 
             #decoder
             if train_dec:
                 loss_decoder.backward(retain_graph=True)  #[p.grad.data.clamp_(-1,1) for p in net.decoder.parameters()]
-                optimizer_decoder.step()
-                net.discriminator.zero_grad()  #clean the discriminator
+                # net.discriminator.zero_grad()  #clean the discriminator
 
-            #discriminator
+            # encoder
+            loss_encoder.backward(retain_graph=True)  #someone likes to clamp the grad here: [p.grad.data.clamp_(-1,1) for p in net.encoder.parameters()]
+            # net.zero_grad()  # cleanothers, so they are not afflicted by encoder loss
+
             if train_dis:
-                loss_discriminator.backward()  #[p.grad.data.clamp_(-1,1) for p in net.discriminator.parameters()]
                 optimizer_discriminator.step()
+
+            if train_dec:
+                optimizer_decoder.step()
+
+            optimizer_encoder.step()
 
             print('[%02d] encoder loss: %.5f | decoder loss: %.5f | discriminator loss: %.5f' % (i, loss_encoder, loss_decoder, loss_discriminator))
 

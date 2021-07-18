@@ -196,10 +196,11 @@ class VaeGan(nn.Module):
     def forward(self, x, gen_size=10):
         if self.training:
             mus, log_variances = self.encoder(x)
+
             z = self.reparameterize(mus, log_variances)
             x_tilde = self.decoder(z)
-            
-            z_p = Variable(torch.randn(len(x), self.z_size).cuda(), requires_grad=True)
+
+            z_p = Variable(torch.randn(len(x), self.z_size), requires_grad=True) #.cuda()
             x_p = self.decoder(z_p)
 
             disc_layer = self.discriminator(x, x_tilde, x_p, "REC")  # discriminator for reconstruction
@@ -208,7 +209,7 @@ class VaeGan(nn.Module):
             return x_tilde, disc_class, disc_layer, mus, log_variances
         else:
             if x is None:
-                z_p = Variable(torch.randn(gen_size, self.z_size).cuda(), requires_grad=False)  # just sample and decode
+                z_p = Variable(torch.randn(gen_size, self.z_size), requires_grad=False) #.cuda()  # just sample and decode
                 x_p = self.decoder(z_p)
                 return x_p
             else:
@@ -222,6 +223,7 @@ class VaeGan(nn.Module):
     def __call__(self, *args, **kwargs):
         return super(VaeGan, self).__call__(*args, **kwargs)
 
+
     @staticmethod
     def loss(x, x_tilde, disc_layer_original, disc_layer_predicted, disc_layer_sampled, disc_class_original, disc_class_predicted, disc_class_sampled, mus, variances):
 
@@ -230,10 +232,10 @@ class VaeGan(nn.Module):
 
         # kl-divergence
         kl = -0.5 * torch.sum(-variances.exp() - torch.pow(mus,2) + variances + 1, 1)
-        
+
         # mse between intermediate layers
         mse = torch.sum(0.5*(disc_layer_original - disc_layer_predicted) ** 2, 1)
-        
+
         # bce for decoder and discriminator for original and reconstructed
         bce_dis_original = -torch.log(disc_class_original + 1e-3)
         bce_dis_predicted = -torch.log(1 - disc_class_predicted + 1e-3)
