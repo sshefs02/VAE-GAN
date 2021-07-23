@@ -158,7 +158,6 @@ class Discriminator(nn.Module):
             ten = self.fc(ten)
             return F.sigmoid(ten)
 
-
     def __call__(self, *args, **kwargs):
         return super(Discriminator, self).__call__(*args, **kwargs)
 
@@ -197,26 +196,25 @@ class VaeGan(nn.Module):
         if self.training:
             mus, log_variances = self.encoder(x)
             z = self.reparameterize(mus, log_variances)
-            x_tilde = self.decoder(z)
+            x_tilde = self.decoder(z.detach())
             
             z_p = Variable(torch.randn(len(x), self.z_size).cuda(), requires_grad=True)
-            x_p = self.decoder(z_p)
+            x_p = self.decoder(z_p.detach())
 
-            disc_layer = self.discriminator(x, x_tilde, x_p, "REC")  # discriminator for reconstruction
-            disc_class = self.discriminator(x, x_tilde, x_p, "GAN")
+            disc_layer = self.discriminator(x, x_tilde.detach(), x_p.detach(), "REC")  # discriminator for reconstruction
+            disc_class = self.discriminator(x, x_tilde.detach(), x_p.detach(), "GAN")
 
             return x_tilde, disc_class, disc_layer, mus, log_variances
         else:
             if x is None:
                 z_p = Variable(torch.randn(gen_size, self.z_size).cuda(), requires_grad=False)  # just sample and decode
-                x_p = self.decoder(z_p)
+                x_p = self.decoder(z_p.detach())
                 return x_p
             else:
                 mus, log_variances = self.encoder(x)
                 z = self.reparameterize(mus, log_variances)
-                x_tilde = self.decoder(z)
+                x_tilde = self.decoder(z.detach())
                 return x_tilde
-
 
 
     def __call__(self, *args, **kwargs):
