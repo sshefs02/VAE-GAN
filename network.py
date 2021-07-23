@@ -199,7 +199,7 @@ class VaeGan(nn.Module):
             x_tilde = self.decoder(z.detach())
             
             z_p = Variable(torch.randn(len(x), self.z_size).cuda(), requires_grad=True)
-            x_p = self.decoder(z_p.detach())
+            x_p = self.decoder(z_p)
 
             disc_layer = self.discriminator(x, x_tilde.detach(), x_p.detach(), "REC")  # discriminator for reconstruction
             disc_class = self.discriminator(x, x_tilde.detach(), x_p.detach(), "GAN")
@@ -208,7 +208,7 @@ class VaeGan(nn.Module):
         else:
             if x is None:
                 z_p = Variable(torch.randn(gen_size, self.z_size).cuda(), requires_grad=False)  # just sample and decode
-                x_p = self.decoder(z_p.detach())
+                x_p = self.decoder(z_p)
                 return x_p
             else:
                 mus, log_variances = self.encoder(x)
